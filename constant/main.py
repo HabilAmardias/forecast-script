@@ -1,0 +1,1 @@
+SevenDays = 7
