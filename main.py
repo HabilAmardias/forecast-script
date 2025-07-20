@@ -66,37 +66,38 @@ def fit_forecast_var(df:pd.DataFrame, differenced: pd.DataFrame, n_test:int, tes
     return var_result, inverse_difference(preds_df, df, non_stationary_columns)
 
 if __name__ == '__main__':
-    config = create_new_config()
-    repo = create_weather_repository(config.db)
-    migration = create_migration_instance(config.db)
-
-    logger = logging.getLogger("forecast")
-    logger.setLevel(logging.DEBUG)
-
-    migration.run()
-    logger.info("Success Migrate")
-    records = repo.get_all_data()
-    logger.info("Successfully get weather data")
-        
-
-    df = pd.DataFrame(records, 
-                      columns=["time", 
-                               "temperature_2m_mean", 
-                               "apparent_temperature_mean",
-                                "rain_sum", 
-                                "wind_gusts_10m_mean",
-                                "wind_speed_10m_mean", 
-                                "relative_humidity_2m_mean"])
-    
-    df["temperature_2m_mean"] = df["temperature_2m_mean"].map(float)
-    df["apparent_temperature_mean"] = df["apparent_temperature_mean"].map(float)
-    df["rain_sum"] = df["rain_sum"].map(float)
-    df["wind_gusts_10m_mean"] = df["wind_gusts_10m_mean"].map(float)
-    df["wind_speed_10m_mean"] = df["wind_speed_10m_mean"].map(float)
-    df["relative_humidity_2m_mean"] = df["relative_humidity_2m_mean"].map(float)
-    df.set_index('time', inplace=True, drop=True)
-
     try:
+        config = create_new_config()
+        repo = create_weather_repository(config.db)
+        migration = create_migration_instance(config.db)
+
+        logger = logging.getLogger("forecast")
+        logger.setLevel(logging.DEBUG)
+
+        migration.run()
+        logger.info("Success Migrate")
+        records = repo.get_all_data()
+        logger.info("Successfully get weather data")
+            
+
+        df = pd.DataFrame(records, 
+                        columns=["time", 
+                                "temperature_2m_mean", 
+                                "apparent_temperature_mean",
+                                    "rain_sum", 
+                                    "wind_gusts_10m_mean",
+                                    "wind_speed_10m_mean", 
+                                    "relative_humidity_2m_mean"])
+        
+        df["temperature_2m_mean"] = df["temperature_2m_mean"].map(float)
+        df["apparent_temperature_mean"] = df["apparent_temperature_mean"].map(float)
+        df["rain_sum"] = df["rain_sum"].map(float)
+        df["wind_gusts_10m_mean"] = df["wind_gusts_10m_mean"].map(float)
+        df["wind_speed_10m_mean"] = df["wind_speed_10m_mean"].map(float)
+        df["relative_humidity_2m_mean"] = df["relative_humidity_2m_mean"].map(float)
+        df.set_index('time', inplace=True, drop=True)
+
+    
         train, test = split_data(df, SevenDays)
 
         non_stationary_cols = stationary_test(df)
