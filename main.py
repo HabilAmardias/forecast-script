@@ -9,6 +9,7 @@ import numpy as np
 from typing import List, Tuple
 import logging
 from migration.main import create_migration_instance
+from datetime import timedelta
 
 def split_data(df:pd.DataFrame, n_test:int):
     train, test = df.iloc[:-n_test], df.iloc[-n_test:]
@@ -97,13 +98,19 @@ if __name__ == '__main__':
         df["relative_humidity_2m_mean"] = df["relative_humidity_2m_mean"].map(float)
         df.set_index('time', inplace=True, drop=True)
 
-    
-        train, test = split_data(df, SevenDays)
 
         non_stationary_cols = stationary_test(df)
-        differenced = differencing_data(train, non_stationary_cols)
+        differenced = differencing_data(df, non_stationary_cols)
 
-        model, res = fit_forecast_var(train, differenced, SevenDays, test.index, non_stationary_cols)
+        start = df.index[-1] + timedelta(days = 1)
+        end = start + timedelta(days = SevenDays - 1)
+        index = pd.date_range(
+            start=start,
+            end=end,
+            freq='D'
+        )
+
+        model, res = fit_forecast_var(df, differenced, SevenDays, index, non_stationary_cols)
 
         res.reset_index(drop=False, inplace=True, names=['time'])
         res['time'] = res['time'].dt.strftime('%Y-%m-%d')
