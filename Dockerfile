@@ -23,5 +23,17 @@ RUN chmod 0644 /etc/cron.d/forecast-job
 RUN crontab /etc/cron.d/forecast-job
 RUN touch /var/log/cron.log
 
-# Start cron service and tail the log
-CMD ["/bin/sh", "-c", "service cron start && tail -f /var/log/cron.log"]
+# Create startup script
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'echo "Starting application..."' >> /start.sh && \
+    echo 'echo "Running initial execution at $(date)" >> /var/log/cron.log' >> /start.sh && \
+    echo 'cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1' >> /start.sh && \
+    echo 'echo "Initial execution completed at $(date)" >> /var/log/cron.log' >> /start.sh && \
+    echo 'service cron start' >> /start.sh && \
+    echo 'echo "Cron service started at $(date)" >> /var/log/cron.log' >> /start.sh && \
+    echo 'tail -f /var/log/cron.log' >> /start.sh
+
+RUN chmod +x /start.sh
+
+# Start with the startup script
+CMD ["/start.sh"]
