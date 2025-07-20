@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     logger = logging.getLogger("forecast")
     logger.setLevel(logging.DEBUG)
-    
+
     migration.run()
     logger.info("Success Migrate")
     records = repo.get_all_data()
@@ -108,7 +108,7 @@ if __name__ == '__main__':
         res['time'] = res['time'].dt.strftime('%Y-%m-%d')
     
         forecast_records = res.to_records(index=False).tolist()
-        repo.insert_forecast(records)
+        repo.insert_forecast(forecast_records)
         logger.info("Forecast success")
     except Exception as e:
         logger.error(repr(e))
