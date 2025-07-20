@@ -72,18 +72,11 @@ if __name__ == '__main__':
 
     logger = logging.getLogger("forecast")
     logger.setLevel(logging.DEBUG)
-
-    try:
-        migration.run()
-        logger.info("Success Migrate")
-    except Exception as e:
-        logger.error(repr(e))
-
-    try:
-        records = repo.get_all_data()
-        logger.info("Successfully get weather data")
-    except Exception as e:
-        logger.error(repr(e))
+    
+    migration.run()
+    logger.info("Success Migrate")
+    records = repo.get_all_data()
+    logger.info("Successfully get weather data")
         
 
     df = pd.DataFrame(records, 
