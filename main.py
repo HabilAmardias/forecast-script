@@ -67,13 +67,12 @@ def fit_forecast_var(df:pd.DataFrame, differenced: pd.DataFrame, n_test:int, tes
     return var_result, inverse_difference(preds_df, df, non_stationary_columns)
 
 if __name__ == '__main__':
+    logger = logging.getLogger("forecast")
+    logger.setLevel(logging.DEBUG)
     try:
         config = create_new_config()
         repo = create_weather_repository(config.db)
         migration = create_migration_instance(config.db)
-
-        logger = logging.getLogger("forecast")
-        logger.setLevel(logging.DEBUG)
 
         migration.run()
         logger.info("Success Migrate")
