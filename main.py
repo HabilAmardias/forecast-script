@@ -2,69 +2,51 @@ from repository.postgres.main import create_weather_repository
 from config.db import create_new_config
 import pandas as pd
 from constant.main import SevenDays
-from statsmodels.tsa.vector_ar.var_model import VAR, VARResultsWrapper
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.vector_ar.vecm import VECM, VECMResults, coint_johansen
+from statsmodels.tsa.vector_ar.var_model import VAR
 from pandas import Index
 import numpy as np
-from typing import List, Tuple
 import logging
 from migration.main import create_migration_instance
 from datetime import timedelta
+import warnings
+
+warnings.filterwarnings("ignore")
 
 def split_data(df:pd.DataFrame, n_test:int):
     train, test = df.iloc[:-n_test], df.iloc[-n_test:]
     return train, test
 
-def stationary_test(df:pd.DataFrame):
-    non_stationary_columns=[]
-
-    for col in df.columns:
-        test_result = adfuller(df[col])
-        pvalue = test_result[1]
-
-        if pvalue > 0.05:
-            non_stationary_columns.append(col)
+def cointegration_test(df:pd.DataFrame, det_order:int):
+    if det_order not in [-1,0,1]:
+        raise ValueError('Wrong Deterministic Order')
     
-    return non_stationary_columns
+    var = VAR(df)
+    lag_order_result = var.select_order(5)
 
-def differencing_data(df:pd.DataFrame, non_stationary_columns:List[str]):
-
-    if len(non_stationary_columns) == 0:
-        return df
+    chosen_lag = lag_order_result.selected_orders['aic'].item() - 1
+    test_result = coint_johansen(endog = df, det_order=det_order, 
+                   k_ar_diff=chosen_lag)
     
-    differenced = df.copy(deep=True)
+    traces = test_result.lr1
+    critical_value = test_result.cvt[:,1] #95% crit values
+
+    r = 0
+    for i in range(len(traces)):
+        if traces[i] <= critical_value[i]:
+            break
+        r += 1
     
-    for col in df.columns:
-        if col in non_stationary_columns:
-            differenced[col] = differenced[col].diff()
+    return r, chosen_lag
 
-    differenced.dropna(inplace=True)
-    return differenced
+def fit_forecast_vecm(df:pd.DataFrame, r: int, chosen_lag: int, test_index:Index):
 
-def inverse_difference(pred:pd.DataFrame, df:pd.DataFrame, non_stationary_columns:List[str]):
+    vecm: VECMResults = VECM(df,coint_rank=r,k_ar_diff=chosen_lag).fit()
 
-    if len(non_stationary_columns) == 0:
-        return pred
-    
-    for col in pred.columns:
-        if col in non_stationary_columns:
-            pred[col] = df[col].iloc[-1] + pred[col].cumsum()
-    
-    return pred
+    preds = vecm.predict(steps = len(test_index))
+    preds_df = pd.DataFrame(preds, columns=df.columns, index=test_index)
 
-def fit_forecast_var(df:pd.DataFrame, differenced: pd.DataFrame, n_test:int, test_index:Index, non_stationary_columns: List[str]) -> Tuple[VARResultsWrapper, pd.DataFrame]:
-    var = VAR(differenced)
-    lag_order_result = var.select_order(20)
-    chosen_lag = lag_order_result.selected_orders['aic'].item()
-
-    var_result:VARResultsWrapper = var.fit(chosen_lag)
-    lags = var_result.k_ar
-
-    forecast_input = df.iloc[-lags:].values
-    preds:np.ndarray = var_result.forecast(forecast_input,steps = n_test)
-    preds_df = pd.DataFrame(preds, columns=df.columns, index = test_index)
-
-    return var_result, inverse_difference(preds_df, df, non_stationary_columns)
+    return vecm, preds_df
 
 if __name__ == '__main__':
     logger = logging.getLogger("forecast")
@@ -84,10 +66,10 @@ if __name__ == '__main__':
                         columns=["time", 
                                 "temperature_2m_mean", 
                                 "apparent_temperature_mean",
-                                    "rain_sum", 
-                                    "wind_gusts_10m_mean",
-                                    "wind_speed_10m_mean", 
-                                    "relative_humidity_2m_mean"])
+                                "rain_sum", 
+                                "wind_gusts_10m_mean",
+                                "wind_speed_10m_mean", 
+                                "relative_humidity_2m_mean"])
         
         df["temperature_2m_mean"] = df["temperature_2m_mean"].map(float)
         df["apparent_temperature_mean"] = df["apparent_temperature_mean"].map(float)
@@ -98,8 +80,7 @@ if __name__ == '__main__':
         df.set_index('time', inplace=True, drop=True)
 
 
-        non_stationary_cols = stationary_test(df)
-        differenced = differencing_data(df, non_stationary_cols)
+        r, chosen_lags = cointegration_test(df, -1)
 
         start = df.index[-1] + timedelta(days = 1)
         end = start + timedelta(days = SevenDays - 1)
@@ -109,7 +90,9 @@ if __name__ == '__main__':
             freq='D'
         )
 
-        model, res = fit_forecast_var(df, differenced, SevenDays, index, non_stationary_cols)
+        model, res = fit_forecast_vecm(df, r, chosen_lags, index)
+
+        res[res < 0] = 0
 
         res.reset_index(drop=False, inplace=True, names=['time'])
         res['time'] = res['time'].dt.strftime('%Y-%m-%d')
